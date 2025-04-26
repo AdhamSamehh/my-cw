@@ -11,7 +11,7 @@
 #include <dirent.h>
 
 #define PORT 8080
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 #define MAX_ATTEMPTS 3
 #define MAX_USERS 100
 
@@ -316,7 +316,7 @@ void handle_list_files(SSL *ssl) {
     char buffer[BUFFER_SIZE];
     DIR *d;
     struct dirent *dir;
-    
+    int DT_REG;
     // List files from both directories
     char *directories[] = {"/home/adham/Documents/Final CW/clientAS/", "/home/adham/Documents/Final CW/serverAS/"};
     memset(buffer, 0, BUFFER_SIZE);

@@ -8,7 +8,7 @@
 #include <openssl/evp.h>
 
 #define PORT 8080
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 2048
 #define MAX_ATTEMPTS 3
 
 // AES encryption in CTR mode using EVP
