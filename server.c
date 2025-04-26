@@ -8,6 +8,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -91,7 +92,7 @@ void handle_read_file(SSL *ssl) {
     filename[bytes_received] = '\0';
 
     // Check if the file exists in the first directory
-    char file_path_client[BUFFER_SIZE] = "/home/adham/Desktop/my cw/clientAS/";
+    char file_path_client[BUFFER_SIZE] = "/home/adham/Documents/Final CW/clientAS/";
     strcat(file_path_client, filename);
     if (file_exists(file_path_client)) {
         file = fopen(file_path_client, "r");
@@ -107,7 +108,7 @@ void handle_read_file(SSL *ssl) {
     }
 
     // Check if the file exists in the second directory
-    char file_path_server[BUFFER_SIZE] = "/home/adham/Desktop/my cw/serverAS/";
+    char file_path_server[BUFFER_SIZE] = "/home/adham/Documents/Final CW/serverAS/";
     strcat(file_path_server, filename);
     if (file_exists(file_path_server)) {
         file = fopen(file_path_server, "r");
@@ -143,9 +144,9 @@ void handle_edit_file(SSL *ssl) {
     filename[bytes_received] = '\0';
 
     // Check if the file exists in the first directory
-    char file_path_client[BUFFER_SIZE] = "/home/adham/Desktop/my cw/clientAS/";
+    char file_path_client[BUFFER_SIZE] = "/home/adham/Documents/Final CW/clientAS/";
     strcat(file_path_client, filename);
-    char file_path_server[BUFFER_SIZE] = "/home/adham/Desktop/my cw/serverAS/";
+    char file_path_server[BUFFER_SIZE] = "/home/adham/Documents/Final CW/serverAS/";
     strcat(file_path_server, filename);
     
     char *file_path = NULL;
@@ -205,7 +206,7 @@ void handle_upload_file(SSL *ssl) {
     filename[bytes_received] = '\0';
 
     // Create file path in server folder
-    char file_path[BUFFER_SIZE] = "/home/adham/Desktop/my cw/serverAS/";
+    char file_path[BUFFER_SIZE] = "/home/adham/Documents/Final CW/serverAS/";
     strcat(file_path, filename);
 
     // Tell client we're ready to receive
@@ -246,7 +247,7 @@ void handle_download_file(SSL *ssl) {
     filename[bytes_received] = '\0';
 
     // Check if file exists in server folder
-    char file_path[BUFFER_SIZE] = "/home/adham/Desktop/my cw/serverAS/";
+    char file_path[BUFFER_SIZE] = "/home/adham/Documents/Final CW/serverAS/";
     strcat(file_path, filename);
     
     file = fopen(file_path, "r");
@@ -294,9 +295,9 @@ void handle_delete_file(SSL *ssl) {
     // Create full file path based on location
     char file_path[BUFFER_SIZE];
     if (strcmp(location, "1") == 0) {
-        strcpy(file_path, "/home/adham/Desktop/my cw/clientAS/");
+        strcpy(file_path, "/home/adham/Documents/Final CW/clientAS/");
     } else if (strcmp(location, "2") == 0) {
-        strcpy(file_path, "/home/adham/Desktop/my cw/serverAS/");
+        strcpy(file_path, "/home/adham/Documents/Final CW/serverAS/");
     } else {
         SSL_write(ssl, "Invalid location specified", strlen("Invalid location specified"));
         return;
@@ -309,6 +310,119 @@ void handle_delete_file(SSL *ssl) {
     } else {
         SSL_write(ssl, "Error deleting file (file may not exist)", strlen("Error deleting file (file may not exist)"));
     }
+}
+
+void handle_list_files(SSL *ssl) {
+    char buffer[BUFFER_SIZE];
+    DIR *d;
+    struct dirent *dir;
+    
+    // List files from both directories
+    char *directories[] = {"/home/adham/Documents/Final CW/clientAS/", "/home/adham/Documents/Final CW/serverAS/"};
+    memset(buffer, 0, BUFFER_SIZE);
+    
+    for (int i = 0; i < 2; i++) {
+        d = opendir(directories[i]);
+        if (d) {
+            if (i == 0) {
+                strcat(buffer, "Files in clientAS:\n");
+            } else {
+                strcat(buffer, "\nFiles in serverAS:\n");
+            }
+            
+            while ((dir = readdir(d)) != NULL) {
+                if (dir->d_type == DT_REG) {  // Only list regular files
+                    strcat(buffer, dir->d_name);
+                    strcat(buffer, "\n");
+                }
+            }
+            closedir(d);
+        }
+    }
+    
+    SSL_write(ssl, buffer, strlen(buffer));
+}
+
+void handle_copy_file(SSL *ssl) {
+    char filename[BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
+    char new_filename[BUFFER_SIZE];
+    FILE *source_file, *dest_file;
+    int bytes_received;
+
+    // Receive filename from client
+    memset(filename, 0, BUFFER_SIZE);
+    bytes_received = SSL_read(ssl, filename, BUFFER_SIZE - 1);
+    if (bytes_received <= 0) {
+        SSL_write(ssl, "Error receiving filename", strlen("Error receiving filename"));
+        return;
+    }
+    filename[bytes_received] = '\0';
+
+    // Check both directories for the file
+    char source_path[BUFFER_SIZE];
+    int found = 0;
+    char *directories[] = {"/home/adham/Documents/Final CW/clientAS/", "/home/adham/Documents/Final CW/serverAS/"};
+    
+    for (int i = 0; i < 2 && !found; i++) {
+        strcpy(source_path, directories[i]);
+        strcat(source_path, filename);
+        
+        if (file_exists(source_path)) {
+            found = 1;
+            
+            // Create new filename with (copyX) suffix
+            char *dot = strrchr(filename, '.');
+            int copy_num = 1;
+            if (dot != NULL) {
+                *dot = '\0';  // temporarily remove extension
+                do {
+                    sprintf(new_filename, "%s(copy%d)%s", filename, copy_num, dot);
+                    strcpy(buffer, directories[i]);
+                    strcat(buffer, new_filename);
+                    copy_num++;
+                } while (file_exists(buffer));
+                *dot = '.';  // restore the dot
+            } else {
+                do {
+                    sprintf(new_filename, "%s(copy%d)", filename, copy_num);
+                    strcpy(buffer, directories[i]);
+                    strcat(buffer, new_filename);
+                    copy_num++;
+                } while (file_exists(buffer));
+            }
+
+            // Copy the file
+            source_file = fopen(source_path, "r");
+            if (source_file == NULL) {
+                SSL_write(ssl, "Error opening source file", strlen("Error opening source file"));
+                return;
+            }
+
+            dest_file = fopen(buffer, "w");
+            if (dest_file == NULL) {
+                fclose(source_file);
+                SSL_write(ssl, "Error creating destination file", strlen("Error creating destination file"));
+                return;
+            }
+
+            // Copy content
+            char ch;
+            while ((ch = fgetc(source_file)) != EOF) {
+                fputc(ch, dest_file);
+            }
+
+            fclose(source_file);
+            fclose(dest_file);
+
+            // Send success message
+            sprintf(buffer, "File copied successfully as %s", new_filename);
+            SSL_write(ssl, buffer, strlen(buffer));
+            return;
+        }
+    }
+
+    SSL_write(ssl, "File not found", strlen("File not found"));
 }
 
 void *client_handler(void *arg) {
@@ -345,7 +459,7 @@ void *client_handler(void *arg) {
             printf("Username: %s\n", email);
             printf("Password: %s\n", password);
             printf("Status: Authentication successful\n");
-            printf("================================\n\n");
+            printf("=================================\n\n");
             SSL_write(ssl, "Login successful", strlen("Login successful"));
             authenticated = 1;
             break;
@@ -355,7 +469,7 @@ void *client_handler(void *arg) {
             printf("Username: %s\n", email);
             printf("Password: %s\n", password);
             printf("Status: Authentication failed\n");
-            printf("================================\n\n");
+            printf("=================================\n\n");
             SSL_write(ssl, "Wrong password. Try again.", strlen("Wrong password. Try again."));
         } else {
             printf("\n==========Authentication==========\n");
@@ -363,7 +477,7 @@ void *client_handler(void *arg) {
             printf("Username: %s\n", email);
             printf("Password: %s\n", password);
             printf("Status: Maximum attempts reached\n");
-            printf("================================\n\n");
+            printf("=================================\n\n");
             SSL_write(ssl, "Failed Login!", strlen("Failed Login!"));
             SSL_free(ssl);
             return NULL;
@@ -378,11 +492,11 @@ void *client_handler(void *arg) {
         while (1) {
             // Display the menu based on role
             if (strcmp(role, "Top") == 0) {
-                SSL_write(ssl, "==========Menu==========\n1. Send a message\n2. Read a file\n3. Edit a file\n4. Upload file from client to server\n5. Download file from server to client\n6. Delete a file\n7. Exit", 180);
+                SSL_write(ssl, "==========Menu==========\n1. Send a message\n2. List files\n3. Read a file\n4. Edit a file\n5. Upload file from client to server\n6. Download file from server to client\n7. Delete a file\n8. Copy file\n9. Exit", 260);
             } else if (strcmp(role, "Medium") == 0) {
-                SSL_write(ssl, "==========Menu==========\n1. Send a message\n2. Read a file\n3. Edit a file\n4. Exit", 130);
+                SSL_write(ssl, "==========Menu==========\n1. Send a message\n2. List files\n3. Read a file\n4. Edit a file\n5. Copy file\n6. Exit", 190);
             } else if (strcmp(role, "Entry") == 0) {
-                SSL_write(ssl, "==========Menu==========\n1. Send a message\n2. Read a file\n3. Exit", 100);
+                SSL_write(ssl, "==========Menu==========\n1. Send a message\n2. List files\n3. Read a file\n4. Exit", 130);
             }
 
             // Receive choice from client
@@ -414,7 +528,7 @@ void *client_handler(void *arg) {
                 printf("=================================\n\n");
 
                 // Save message to file
-                FILE *msg_file = fopen("/home/adham/Desktop/my cw/serverAS/messages.txt", "a");
+                FILE *msg_file = fopen("/home/adham/Documents/Final CW/serverAS/messages.txt", "a");
                 if (msg_file != NULL) {
                     fprintf(msg_file, "%s: %s\n", email, buffer);
                     fclose(msg_file);
@@ -425,21 +539,30 @@ void *client_handler(void *arg) {
                 SSL_write(ssl, response, strlen(response));
             }
             else if (choice == 2) {
-                handle_read_file(ssl);
+                handle_list_files(ssl);
             }
             else if (choice == 3) {
+                handle_read_file(ssl);
+            }
+            else if (choice == 4) {
                 handle_edit_file(ssl);
             }
-            else if (choice == 4 && strcmp(role, "Top") == 0) {
+            else if (choice == 5 && strcmp(role, "Top") == 0) {
                 handle_upload_file(ssl);
             }
-            else if (choice == 5 && strcmp(role, "Top") == 0) {
+            else if (choice == 6 && strcmp(role, "Top") == 0) {
                 handle_download_file(ssl);
             }
-            else if (choice == 6 && strcmp(role, "Top") == 0) {
+            else if (choice == 7 && strcmp(role, "Top") == 0) {
                 handle_delete_file(ssl);
             }
-            else if (choice == 7 || (strcmp(role, "Medium") == 0 && choice == 4) || (strcmp(role, "Entry") == 0 && choice == 3)) {
+            else if (choice == 8 && strcmp(role, "Top") == 0) {
+                handle_copy_file(ssl);
+            }
+            else if (choice == 5 && strcmp(role, "Medium") == 0) {
+                handle_copy_file(ssl);
+            }
+            else if (choice == 9 || (strcmp(role, "Medium") == 0 && choice == 6) || (strcmp(role, "Entry") == 0 && choice == 4)) {
                 SSL_write(ssl, "Goodbye!", strlen("Goodbye!"));
                 break;  // Break out of the loop if the client chooses to exit
             }

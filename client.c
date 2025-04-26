@@ -116,7 +116,7 @@ void upload_file(SSL *ssl) {
     filename[strcspn(filename, "\n")] = 0;  // Remove newline character
 
     // Check if file exists in client folder
-    char file_path[BUFFER_SIZE] = "/home/adham/Desktop/my cw/clientAS/";
+    char file_path[BUFFER_SIZE] = "/home/adham/Documents/Final CW/clientAS/";
     strcat(file_path, filename);
     
     file = fopen(file_path, "r");
@@ -175,7 +175,7 @@ void download_file(SSL *ssl) {
         
         if (strstr(buffer, "File not found") == NULL) {
             // Create file in client folder
-            char file_path[BUFFER_SIZE] = "/home/adham/Desktop/my cw/clientAS/";
+            char file_path[BUFFER_SIZE] = "/home/adham/Documents/Final CW/clientAS/";
             strcat(file_path, filename);
             
             file = fopen(file_path, "w");
@@ -222,6 +222,45 @@ void delete_file(SSL *ssl) {
         printf("%s\n", buffer);
     } else {
         printf("Error communicating with server\n");
+    }
+}
+
+void list_files(SSL *ssl) {
+    char buffer[BUFFER_SIZE];
+    int bytes_received;
+
+    // Receive the list of files from server
+    memset(buffer, 0, BUFFER_SIZE);
+    bytes_received = SSL_read(ssl, buffer, BUFFER_SIZE - 1);
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';
+        printf("\n%s\n", buffer);
+    } else {
+        printf("Error receiving file list from server.\n");
+    }
+}
+
+void copy_file(SSL *ssl) {
+    char filename[BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
+    int bytes_received;
+
+    // Prompt for filename
+    printf("Enter the file name to copy: ");
+    fgets(filename, sizeof(filename), stdin);
+    filename[strcspn(filename, "\n")] = 0;  // Remove newline character
+
+    // Send the filename to the server
+    SSL_write(ssl, filename, strlen(filename));
+
+    // Get server's response
+    memset(buffer, 0, BUFFER_SIZE);
+    bytes_received = SSL_read(ssl, buffer, BUFFER_SIZE - 1);
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';
+        printf("%s\n", buffer);
+    } else {
+        printf("Error communicating with server.\n");
     }
 }
 
@@ -272,44 +311,49 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // Get email
-    printf("Email Required: ");
-    scanf("%s", email);
-    SSL_write(ssl, email, strlen(email));
-
     int authenticated = 0;
 
-    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        // Get password
+    int attempts = 0;
+    while (attempts < MAX_ATTEMPTS) {
+        // Get email from user
+        printf("Email Required: ");
+        fgets(email, sizeof(email), stdin);
+        email[strcspn(email, "\n")] = 0;  // Remove newline character
+
+        // Get password from user
         printf("Password Required: ");
-        scanf("%s", password);
+        fgets(password, sizeof(password), stdin);
+        password[strcspn(password, "\n")] = 0;  // Remove newline character
+
+        // Send email to server
+        SSL_write(ssl, email, strlen(email));
+        
+        // Send password to server
         SSL_write(ssl, password, strlen(password));
 
-        // Receive response from server
+        // Get server's response
         memset(buffer, 0, BUFFER_SIZE);
         int bytes_received = SSL_read(ssl, buffer, BUFFER_SIZE - 1);
         if (bytes_received > 0) {
             buffer[bytes_received] = '\0';
             printf("Server: %s\n", buffer);
-        } else {
-            printf("No response from server.\n");
-            SSL_free(ssl);
-            return 0;
-        }
 
-        if (strcmp(buffer, "Login successful") == 0) {
-            authenticated = 1;
-            break;
-        } else if (strcmp(buffer, "Failed Login!") == 0) {
-            SSL_free(ssl);
-            return 0;
+            if (strcmp(buffer, "Login successful") == 0) {
+                authenticated = 1;
+                break;
+            } else {
+                attempts++;
+                if (attempts < MAX_ATTEMPTS) {
+                    printf("Authentication failed. Attempts remaining: %d\n", MAX_ATTEMPTS - attempts);
+                }
+            }
         }
     }
 
-    // If authentication failed, exit before message prompt
     if (!authenticated) {
-        printf("Authentication failed. Exiting...\n");
+        printf("Maximum login attempts exceeded. Exiting...\n");
         SSL_free(ssl);
+        close(sock);
         return 0;
     }
 
@@ -334,11 +378,11 @@ int main() {
         // Ask the user to choose an option (based on role)
         int choice;
         if (strcmp(role, "Top") == 0) {
-            printf("Enter a number from 1-7 (7 to exit): ");
+            printf("Enter a number from 1-9 (9 to exit): ");
         } else if (strcmp(role, "Medium") == 0) {
-            printf("Enter a number from 1-4 (4 to exit): ");
+            printf("Enter a number from 1-6 (6 to exit): ");
         } else if (strcmp(role, "Entry") == 0) {
-            printf("Enter a number from 1-3 (3 to exit): ");
+            printf("Enter a number from 1-4 (4 to exit): ");
         }
     
         scanf("%d", &choice);
@@ -356,35 +400,49 @@ int main() {
             SSL_write(ssl, message, strlen(message));
         }
         else if (choice == 2) {
+            list_files(ssl);
+            continue;
+        }
+        else if (choice == 3) {
             getchar();  // Consume the newline character
             read_file(ssl);
             continue;  // Skip the generic response handling
         }
-        else if (choice == 3) {
+        else if (choice == 4 && strcmp(role, "Top") == 0) {
             getchar();  // Consume the newline character
             edit_file(ssl);
             continue;  // Skip the generic response handling
         }
-        else if (choice == 4 && strcmp(role, "Top") == 0) {
+        else if (choice == 5 && strcmp(role, "Top") == 0) {
             getchar();  // Consume the newline character
             upload_file(ssl);
             continue;  // Skip the generic response handling
         }
-        else if (choice == 5 && strcmp(role, "Top") == 0) {
+        else if (choice == 6 && strcmp(role, "Top") == 0) {
             getchar();  // Consume the newline character
             download_file(ssl);
             continue;  // Skip the generic response handling
         }
-        else if (choice == 6 && strcmp(role, "Top") == 0) {
+        else if (choice == 7 && strcmp(role, "Top") == 0) {
             getchar();  // Consume the newline character
             delete_file(ssl);
             continue;  // Skip the generic response handling
         }
+        else if (choice == 8 && strcmp(role, "Top") == 0) {
+            getchar();
+            copy_file(ssl);
+            continue;
+        }
+        else if (choice == 5 && strcmp(role, "Medium") == 0) {
+            getchar();
+            copy_file(ssl);
+            continue;
+        }
     
         // Exit condition based on role
-        if ((strcmp(role, "Top") == 0 && choice == 7) || 
-            (strcmp(role, "Medium") == 0 && choice == 4) || 
-            (strcmp(role, "Entry") == 0 && choice == 3)) {
+        if ((strcmp(role, "Top") == 0 && choice == 9) || 
+            (strcmp(role, "Medium") == 0 && choice == 6) || 
+            (strcmp(role, "Entry") == 0 && choice == 4)) {
             printf("Exiting...\n");
             break;  // Break out of the loop if the client chooses to exit
         }
