@@ -316,11 +316,10 @@ void handle_list_files(SSL *ssl) {
     char buffer[BUFFER_SIZE];
     DIR *d;
     struct dirent *dir;
-    int DT_REG;
     // List files from both directories
     char *directories[] = {"/home/adham/Documents/Final CW/clientAS/", "/home/adham/Documents/Final CW/serverAS/"};
     memset(buffer, 0, BUFFER_SIZE);
-    
+
     for (int i = 0; i < 2; i++) {
         d = opendir(directories[i]);
         if (d) {
